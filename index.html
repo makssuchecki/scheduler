@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plan zajęć</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --surface: #ffffff;
+    --text: #1d1d1f;
+    --muted: #8a8a8e;
+    --line: #ececea;
+    --line-strong: #dcdcd8;
+    --accent: #2f6fed;
+
+    --wyklad: #3b6fd8;   --wyklad-bg: #eaf0fc;
+    --lab: #1f9d74;      --lab-bg: #e5f5ef;
+    --cw: #d9822b;       --cw-bg: #fbf0e3;
+    --inne: #8a5cd1;     --inne-bg: #f1eafb;
+
+    --hour: 64px;
+    --radius: 10px;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141416; --surface: #1c1c1f; --text: #ececed; --muted: #8d8d93;
+      --line: #26262a; --line-strong: #333338; --accent: #6b9bff;
+      --wyklad: #7fa4f2; --wyklad-bg: #1f2a40;
+      --lab: #5cc9a2;    --lab-bg: #173229;
+      --cw: #f0a75f;     --cw-bg: #3a2a1a;
+      --inne: #b593ec;   --inne-bg: #2c2340;
+      color-scheme: dark;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 20px 64px; }
+
+  header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; letter-spacing: -0.01em; flex: 1; }
+  .legend { display: flex; gap: 14px; color: var(--muted); font-size: 12px; flex-wrap: wrap; }
+  .legend span::before {
+    content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    margin-right: 6px; background: var(--c); vertical-align: 1px;
+  }
+
+  button {
+    font: inherit; border: 1px solid var(--line-strong); background: var(--surface);
+    color: var(--text); padding: 7px 12px; border-radius: 8px; cursor: pointer;
+  }
+  button:hover { border-color: var(--muted); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+  button.ghost:hover { color: var(--text); }
+  button.danger { color: #d64545; }
+
+  /* ---------- grid ---------- */
+  .scroller { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+  .grid { display: grid; grid-template-columns: 52px repeat(var(--days), minmax(150px, 1fr)); min-width: calc(52px + var(--days) * 150px); }
+  .dayhead {
+    position: sticky; top: 0; padding: 12px 10px; font-size: 12px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+    border-bottom: 1px solid var(--line); border-left: 1px solid var(--line); background: var(--surface);
+  }
+  .dayhead.today { color: var(--accent); }
+  .corner { border-bottom: 1px solid var(--line); }
+  .times { position: relative; }
+  .times div {
+    height: var(--hour); font-size: 11px; color: var(--muted); text-align: right;
+    padding-right: 8px; transform: translateY(-7px); font-variant-numeric: tabular-nums;
+  }
+  .times div:first-child { visibility: hidden; }
+  .col {
+    position: relative; border-left: 1px solid var(--line); cursor: copy;
+    background-image: linear-gradient(var(--line) 1px, transparent 1px);
+    background-size: 100% var(--hour);
+  }
+  .col.today { background-color: color-mix(in srgb, var(--accent) 3%, transparent); }
+  .now { position: absolute; left: 0; right: 0; height: 2px; background: #e5484d; z-index: 3; pointer-events: none; }
+  .now::before { content: ""; position: absolute; left: -4px; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: #e5484d; }
+
+  .ev {
+    position: absolute; padding: 6px 8px 6px 10px; border-radius: 8px; overflow: hidden;
+    background: var(--bg-c); border-left: 3px solid var(--c); cursor: pointer; z-index: 2;
+    display: flex; flex-direction: column; gap: 1px; transition: transform .08s;
+  }
+  .ev:hover { transform: translateY(-1px); box-shadow: 0 3px 10px rgb(0 0 0 / .08); }
+  .ev .t { font-weight: 600; font-size: 13px; line-height: 1.25; }
+  .ev .m { font-size: 11.5px; color: var(--muted); }
+  .ev .m b { color: var(--c); font-weight: 600; }
+  .ev .tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
+  .tag { font-size: 10.5px; padding: 0 6px; border-radius: 99px; border: 1px solid var(--c); color: var(--c); }
+  .ev .note-dot { position: absolute; top: 6px; right: 7px; width: 6px; height: 6px; border-radius: 50%; background: var(--c); }
+  .ev.dim { opacity: .35; }
+  /* short blocks: one line per row, truncate instead of overflowing */
+  .ev.compact { padding-top: 4px; padding-bottom: 4px; gap: 0; }
+  .ev.compact .t, .ev.compact .m { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ev.compact .t { font-size: 12.5px; padding-right: 8px; }
+  .ev.compact .tags { display: none; }
+  .ev.tiny .m { display: none; }
+
+  .t-wyklad { --c: var(--wyklad); --bg-c: var(--wyklad-bg); }
+  .t-lab    { --c: var(--lab);    --bg-c: var(--lab-bg); }
+  .t-cw     { --c: var(--cw);     --bg-c: var(--cw-bg); }
+  .t-inne   { --c: var(--inne);   --bg-c: var(--inne-bg); }
+
+  .toolbar { display: flex; gap: 8px; align-items: center; margin: 0 0 12px; flex-wrap: wrap; }
+  .seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; padding: 6px 11px; color: var(--muted); }
+  .seg button.on { background: var(--text); color: var(--surface); }
+  .spacer { flex: 1; }
+  .hint { color: var(--muted); font-size: 12px; }
+
+  /* ---------- notes ---------- */
+  .lower { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 24px; }
+  @media (max-width: 760px) { .lower { grid-template-columns: 1fr; } }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 12px; font-weight: 600; }
+  .card textarea { width: 100%; min-height: 140px; border: 0; resize: vertical; background: transparent; color: var(--text); font: inherit; outline: none; }
+  .notes-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .notes-list li { display: flex; gap: 10px; cursor: pointer; }
+  .notes-list li::before { content: ""; flex: none; width: 3px; border-radius: 2px; background: var(--c); }
+  .notes-list .nt { font-weight: 600; font-size: 13px; }
+  .notes-list .nb { color: var(--muted); font-size: 13px; white-space: pre-wrap; }
+  .empty { color: var(--muted); font-size: 13px; }
+
+  /* ---------- dialog ---------- */
+  dialog {
+    border: 0; border-radius: 16px; padding: 0; width: min(460px, calc(100vw - 32px));
+    background: var(--surface); color: var(--text); box-shadow: 0 20px 60px rgb(0 0 0 / .25);
+  }
+  dialog::backdrop { background: rgb(0 0 0 / .3); backdrop-filter: blur(2px); }
+  dialog form { padding: 22px; display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+  dialog h3 { grid-column: 1/-1; margin: 0 0 4px; font-size: 16px; }
+  .f { display: flex; flex-direction: column; gap: 4px; }
+  .f.full { grid-column: 1/-1; }
+  .f label { font-size: 11.5px; color: var(--muted); font-weight: 500; }
+  .f input, .f select, .f textarea {
+    font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line-strong);
+    background: var(--bg); color: var(--text); width: 100%;
+  }
+  .f input:focus, .f select:focus, .f textarea:focus { outline: 2px solid color-mix(in srgb, var(--accent) 40%, transparent); border-color: var(--accent); }
+  .f textarea { min-height: 64px; resize: vertical; }
+  .types { display: flex; gap: 6px; flex-wrap: wrap; }
+  .types input { display: none; }
+  .types label {
+    font-size: 12.5px; color: var(--text); padding: 6px 11px; border-radius: 99px; cursor: pointer;
+    border: 1px solid var(--line-strong);
+  }
+  .types input:checked + label { background: var(--bg-c); border-color: var(--c); color: var(--c); font-weight: 600; }
+  .actions { grid-column: 1/-1; display: flex; gap: 8px; margin-top: 6px; }
+  .actions .spacer { flex: 1; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Plan zajęć</h1>
+    <div class="legend">
+      <span style="--c:var(--wyklad)">Wykład</span>
+      <span style="--c:var(--lab)">Laboratorium</span>
+      <span style="--c:var(--cw)">Ćwiczenia</span>
+      <span style="--c:var(--inne)">Inne</span>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <div class="seg" id="weekSeg" title="Filtr zajęć odbywających się co dwa tygodnie">
+      <button data-w="all" class="on">Wszystkie tyg.</button>
+      <button data-w="A">Tydzień A</button>
+      <button data-w="B">Tydzień B</button>
+    </div>
+    <button class="ghost" id="toggleSat">+ sobota</button>
+    <span class="spacer"></span>
+    <span class="hint">Kliknij w pustą komórkę, aby dodać</span>
+    <button class="primary" id="addBtn">Dodaj zajęcia</button>
+  </div>
+
+  <div class="scroller"><div class="grid" id="grid"></div></div>
+
+  <div class="lower">
+    <section class="card">
+      <h2>Notatki do zajęć</h2>
+      <ul class="notes-list" id="evNotes"></ul>
+    </section>
+    <section class="card">
+      <h2>Notatki ogólne</h2>
+      <textarea id="generalNotes" placeholder="np. terminy zajęć z firmami podane później, zmiany sal, odwołane zajęcia…"></textarea>
+    </section>
+  </div>
+
+  <div class="toolbar" style="margin-top:20px">
+    <span class="spacer"></span>
+    <button class="ghost" id="exportBtn">Eksportuj JSON</button>
+    <button class="ghost" id="importBtn">Importuj JSON</button>
+    <input type="file" id="importFile" accept="application/json" hidden>
+  </div>
+</div>
+
+<dialog id="dlg">
+  <form method="dialog" id="form">
+    <h3 id="dlgTitle">Nowe zajęcia</h3>
+    <div class="f full"><label>Przedmiot</label><input name="name" required autocomplete="off" placeholder="np. Programowanie współbieżne"></div>
+    <div class="f full">
+      <label>Rodzaj</label>
+      <div class="types">
+        <input type="radio" name="type" id="ty1" value="wyklad" checked><label for="ty1" class="t-wyklad">Wykład</label>
+        <input type="radio" name="type" id="ty2" value="lab"><label for="ty2" class="t-lab">Laboratorium</label>
+        <input type="radio" name="type" id="ty3" value="cw"><label for="ty3" class="t-cw">Ćwiczenia</label>
+        <input type="radio" name="type" id="ty4" value="inne"><label for="ty4" class="t-inne">Inne</label>
+      </div>
+    </div>
+    <div class="f full"><label>Prowadzący</label><input name="teacher" autocomplete="off" placeholder="np. dr Paweł Pączkowski"></div>
+    <div class="f"><label>Sala</label><input name="room" autocomplete="off" placeholder="np. A101"></div>
+    <div class="f"><label>Dzień</label>
+      <select name="day">
+        <option value="0">Poniedziałek</option><option value="1">Wtorek</option><option value="2">Środa</option>
+        <option value="3">Czwartek</option><option value="4">Piątek</option><option value="5">Sobota</option>
+      </select>
+    </div>
+    <div class="f"><label>Od</label><input type="time" name="start" required step="300" value="08:00"></div>
+    <div class="f"><label>Do</label><input type="time" name="end" required step="300" value="09:30"></div>
+    <div class="f"><label>Częstotliwość</label>
+      <select name="freq">
+        <option value="">Co tydzień</option>
+        <option value="A">Co 2 tyg. — tydzień A</option>
+        <option value="B">Co 2 tyg. — tydzień B</option>
+      </select>
+    </div>
+    <div class="f"><label>Grupa</label><input name="group" autocomplete="off" placeholder="np. gr. 2"></div>
+    <div class="f full"><label>Notatka</label><textarea name="note" placeholder="np. pierwsze zajęcia 15.10, sala może się zmienić…"></textarea></div>
+    <div class="actions">
+      <button type="button" class="danger" id="delBtn">Usuń</button>
+      <span class="spacer"></span>
+      <button type="button" id="cancelBtn">Anuluj</button>
+      <button type="submit" class="primary">Zapisz</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+const KEY = 'plan-zajec-v1';
+const DAYS = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota'];
+const TYPE_LABEL = { wyklad: 'wykład', lab: 'laboratorium', cw: 'ćwiczenia', inne: 'inne' };
+
+let state = load();
+let weekFilter = 'all';
+let editingId = null;
+
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem(KEY));
+    if (s && Array.isArray(s.events)) return { saturday: false, notes: '', ...s };
+  } catch {}
+  return { events: [], notes: '', saturday: false };
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {}
+}
+
+const toMin = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function hourRange() {
+  let lo = 8, hi = 18;
+  for (const e of state.events) {
+    lo = Math.min(lo, Math.floor(toMin(e.start) / 60));
+    hi = Math.max(hi, Math.ceil(toMin(e.end) / 60));
+  }
+  return [lo, hi];
+}
+
+// Split overlapping events in a day into side-by-side lanes.
+function layoutDay(evs) {
+  evs.sort((a, b) => toMin(a.start) - toMin(b.start) || toMin(b.end) - toMin(a.end));
+  const out = [];
+  let cluster = [], clusterEnd = -1;
+  const flush = () => {
+    const lanes = [];
+    for (const e of cluster) {
+      let i = lanes.findIndex(end => end <= toMin(e.start));
+      if (i === -1) { i = lanes.length; lanes.push(0); }
+      lanes[i] = toMin(e.end);
+      out.push({ e, lane: i });
+    }
+    const n = lanes.length;
+    out.slice(-cluster.length).forEach(o => o.lanes = n);
+    cluster = [];
+  };
+  for (const e of evs) {
+    if (cluster.length && toMin(e.start) >= clusterEnd) flush();
+    cluster.push(e);
+    clusterEnd = Math.max(clusterEnd, toMin(e.end));
+  }
+  if (cluster.length) flush();
+  return out;
+}
+
+function render() {
+  const nDays = state.saturday ? 6 : 5;
+  const [lo, hi] = hourRange();
+  const hourPx = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hour'));
+  const pxPerMin = hourPx / 60;
+  const todayIdx = (new Date().getDay() + 6) % 7;
+
+  const grid = document.getElementById('grid');
+  grid.style.setProperty('--days', nDays);
+  let html = '<div class="corner"></div>';
+  for (let d = 0; d < nDays; d++) html += `<div class="dayhead ${d === todayIdx ? 'today' : ''}">${DAYS[d]}</div>`;
+  html += '<div class="times">';
+  for (let h = lo; h < hi; h++) html += `<div>${h}:00</div>`;
+  html += '</div>';
+
+  for (let d = 0; d < nDays; d++) {
+    html += `<div class="col ${d === todayIdx ? 'today' : ''}" data-day="${d}" style="height:${(hi - lo) * hourPx}px">`;
+    const evs = state.events.filter(e => +e.day === d);
+    for (const { e, lane, lanes } of layoutDay(evs)) {
+      const top = (toMin(e.start) - lo * 60) * pxPerMin;
+      const h = (toMin(e.end) - toMin(e.start)) * pxPerMin;
+      const w = 100 / lanes;
+      const dim = weekFilter !== 'all' && e.freq && e.freq !== weekFilter;
+      const tags = [];
+      if (e.freq) tags.push(`co 2 tyg. ${e.freq}`);
+      if (e.group) tags.push(e.group);
+      const size = h < 40 ? 'compact tiny' : h < 100 ? 'compact' : '';
+      const meta = `<b>${TYPE_LABEL[e.type]}</b> · ${esc(e.start)}–${esc(e.end)}${e.room ? ' · ' + esc(e.room) : ''}`;
+      const full = [e.name, `${TYPE_LABEL[e.type]} · ${e.start}–${e.end}`, e.room && `sala ${e.room}`, e.teacher, ...tags]
+        .filter(Boolean).join('\n');
+      html += `<div class="ev t-${e.type} ${size} ${dim ? 'dim' : ''}" data-id="${e.id}" title="${esc(full)}"
+        style="top:${top + 2}px;height:${h - 4}px;left:calc(${lane * w}% + 4px);width:calc(${w}% - 8px)">
+        ${e.note ? '<span class="note-dot" title="Ma notatkę"></span>' : ''}
+        <div class="t">${esc(e.name)}</div>
+        ${size
+          ? `<div class="m">${meta}${tags.length ? ' · ' + tags.map(esc).join(' · ') : ''}</div>
+             ${e.teacher ? `<div class="m">${esc(e.teacher)}</div>` : ''}`
+          : `<div class="m">${meta}</div>
+             ${e.teacher ? `<div class="m">${esc(e.teacher)}</div>` : ''}
+             ${tags.length ? `<div class="tags">${tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}`}
+      </div>`;
+    }
+    if (d === todayIdx) {
+      const now = new Date(), m = now.getHours() * 60 + now.getMinutes();
+      if (m >= lo * 60 && m <= hi * 60) html += `<div class="now" style="top:${(m - lo * 60) * pxPerMin}px"></div>`;
+    }
+    html += '</div>';
+  }
+  grid.innerHTML = html;
+
+  // event notes list
+  const withNotes = state.events.filter(e => e.note?.trim())
+    .sort((a, b) => a.day - b.day || toMin(a.start) - toMin(b.start));
+  document.getElementById('evNotes').innerHTML = withNotes.length
+    ? withNotes.map(e => `<li class="t-${e.type}" data-id="${e.id}"><div>
+        <div class="nt">${esc(e.name)} <span class="m" style="color:var(--muted);font-weight:400">· ${DAYS[e.day].slice(0, 3)} ${esc(e.start)}</span></div>
+        <div class="nb">${esc(e.note)}</div></div></li>`).join('')
+    : '<li class="empty">Notatki dodane do zajęć pojawią się tutaj.</li>';
+
+  document.getElementById('toggleSat').textContent = state.saturday ? '− sobota' : '+ sobota';
+}
+
+// ---------- dialog ----------
+const dlg = document.getElementById('dlg');
+const form = document.getElementById('form');
+
+function openDialog(ev, preset = {}) {
+  editingId = ev?.id ?? null;
+  form.reset();
+  const data = ev ?? { type: 'wyklad', day: 0, start: '08:00', end: '09:30', ...preset };
+  for (const [k, v] of Object.entries(data)) {
+    const el = form.elements[k];
+    if (!el) continue;
+    if (el instanceof RadioNodeList) el.value = v; else el.value = v ?? '';
+  }
+  document.getElementById('dlgTitle').textContent = ev ? 'Edytuj zajęcia' : 'Nowe zajęcia';
+  document.getElementById('delBtn').hidden = !ev;
+  dlg.showModal();
+  form.elements.name.focus();
+}
+
+form.addEventListener('submit', e => {
+  const fd = Object.fromEntries(new FormData(form));
+  if (toMin(fd.end) <= toMin(fd.start)) {
+    e.preventDefault();
+    form.elements.end.setCustomValidity('Koniec musi być po początku');
+    form.elements.end.reportValidity();
+    return;
+  }
+  fd.day = +fd.day;
+  if (editingId) Object.assign(state.events.find(x => x.id === editingId), fd);
+  else state.events.push({ id: crypto.randomUUID?.() ?? String(Date.now()), ...fd });
+  save(); render();
+});
+form.elements.end.addEventListener('input', e => e.target.setCustomValidity(''));
+form.elements.start.addEventListener('change', e => {
+  // keep duration sensible when moving the start time
+  const s = toMin(e.target.value), en = toMin(form.elements.end.value || '00:00');
+  if (en <= s) {
+    const m = s + 90;
+    form.elements.end.value = `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  }
+});
+document.getElementById('cancelBtn').onclick = () => dlg.close();
+document.getElementById('delBtn').onclick = () => {
+  const btn = document.getElementById('delBtn');
+  if (btn.dataset.confirm !== '1') { btn.dataset.confirm = '1'; btn.textContent = 'Na pewno?'; return; }
+  state.events = state.events.filter(x => x.id !== editingId);
+  save(); render(); dlg.close();
+};
+dlg.addEventListener('close', () => {
+  const btn = document.getElementById('delBtn');
+  btn.dataset.confirm = ''; btn.textContent = 'Usuń';
+});
+
+// ---------- interactions ----------
+document.getElementById('grid').addEventListener('click', e => {
+  const ev = e.target.closest('.ev');
+  if (ev) return openDialog(state.events.find(x => x.id === ev.dataset.id));
+  const col = e.target.closest('.col');
+  if (!col) return;
+  const [lo] = hourRange();
+  const hourPx = col.offsetHeight / (hourRange()[1] - lo);
+  const y = e.clientY - col.getBoundingClientRect().top;
+  const h = lo + Math.floor(y / hourPx);
+  const pad = n => String(n).padStart(2, '0');
+  openDialog(null, { day: +col.dataset.day, start: `${pad(h)}:00`, end: `${pad(h + 1)}:30` });
+});
+document.getElementById('evNotes').addEventListener('click', e => {
+  const li = e.target.closest('li[data-id]');
+  if (li) openDialog(state.events.find(x => x.id === li.dataset.id));
+});
+document.getElementById('addBtn').onclick = () => openDialog(null);
+document.getElementById('toggleSat').onclick = () => { state.saturday = !state.saturday; save(); render(); };
+document.getElementById('weekSeg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  weekFilter = b.dataset.w;
+  document.querySelectorAll('#weekSeg button').forEach(x => x.classList.toggle('on', x === b));
+  render();
+});
+
+const notesEl = document.getElementById('generalNotes');
+notesEl.value = state.notes;
+notesEl.addEventListener('input', () => { state.notes = notesEl.value; save(); });
+
+document.getElementById('exportBtn').onclick = () => {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: 'plan-zajec.json' });
+  a.click(); URL.revokeObjectURL(a.href);
+};
+document.getElementById('importBtn').onclick = () => document.getElementById('importFile').click();
+document.getElementById('importFile').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const s = JSON.parse(await f.text());
+    if (!Array.isArray(s.events)) throw 0;
+    state = { saturday: false, notes: '', ...s };
+    notesEl.value = state.notes;
+    save(); render();
+  } catch { alert('Nieprawidłowy plik.'); }
+  e.target.value = '';
+};
+
+render();
+setInterval(render, 60_000);
+</script>
+</body>
+</html>
